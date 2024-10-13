@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Roo Search Engine</title>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+</head>
+
+<body>
+   <div class="container mt-5">
+      <h1 class="text-center">Welcome to Roo Search Engine</h1>
+      <form id="searchForm" class="d-flex justify-content-center mt-4">
+         <input type="text" id="query" class="form-control me-2" placeholder="Enter your search term" required>
+         <button type="submit" class="btn btn-primary">Search</button>
+      </form>
+      <div id="results" class="mt-4"></div>
+   </div>
+
+   <script>
+      const form = document.getElementById('searchForm');
+      form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const query = document.getElementById('query').value;
+          const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          const resultsDiv = document.getElementById('results');
+          resultsDiv.innerHTML = `<h4>Results for "${data.query}":</h4>`;
+
+          if (Object.keys(data.results).length > 0) {
+              for (const url in data.results) {
+                  const positions = data.results[url].join(', ');
+                  resultsDiv.innerHTML += `<p><a href="${url}" target="_blank">${url}</a> (Found at positions: ${positions})</p>`;
+              }
+          } else {
+              resultsDiv.innerHTML += '<p>No results found.</p>';
+          }
+      });
+  </script>
+</body>
+
+</html>

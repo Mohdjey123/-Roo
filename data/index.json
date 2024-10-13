@@ -1,0 +1,166 @@
+{
+  "": [
+    {
+      "url": "https://example.com",
+      "position": 0
+    },
+    {
+      "url": "https://example.com",
+      "position": 29
+    }
+  ],
+  "example": [
+    {
+      "url": "https://example.com",
+      "position": 1
+    }
+  ],
+  "domain": [
+    {
+      "url": "https://example.com",
+      "position": 2
+    },
+    {
+      "url": "https://example.com",
+      "position": 4
+    },
+    {
+      "url": "https://example.com",
+      "position": 17
+    }
+  ],
+  "this": [
+    {
+      "url": "https://example.com",
+      "position": 3
+    },
+    {
+      "url": "https://example.com",
+      "position": 16
+    }
+  ],
+  "is": [
+    {
+      "url": "https://example.com",
+      "position": 5
+    }
+  ],
+  "for": [
+    {
+      "url": "https://example.com",
+      "position": 6
+    },
+    {
+      "url": "https://example.com",
+      "position": 25
+    }
+  ],
+  "use": [
+    {
+      "url": "https://example.com",
+      "position": 7
+    },
+    {
+      "url": "https://example.com",
+      "position": 15
+    }
+  ],
+  "in": [
+    {
+      "url": "https://example.com",
+      "position": 8
+    },
+    {
+      "url": "https://example.com",
+      "position": 11
+    },
+    {
+      "url": "https://example.com",
+      "position": 18
+    }
+  ],
+  "illustrative": [
+    {
+      "url": "https://example.com",
+      "position": 9
+    }
+  ],
+  "examples": [
+    {
+      "url": "https://example.com",
+      "position": 10
+    }
+  ],
+  "documents.": [
+    {
+      "url": "https://example.com",
+      "position": 12
+    }
+  ],
+  "you": [
+    {
+      "url": "https://example.com",
+      "position": 13
+    }
+  ],
+  "may": [
+    {
+      "url": "https://example.com",
+      "position": 14
+    }
+  ],
+  "literature": [
+    {
+      "url": "https://example.com",
+      "position": 19
+    }
+  ],
+  "without": [
+    {
+      "url": "https://example.com",
+      "position": 20
+    }
+  ],
+  "prior": [
+    {
+      "url": "https://example.com",
+      "position": 21
+    }
+  ],
+  "coordination": [
+    {
+      "url": "https://example.com",
+      "position": 22
+    }
+  ],
+  "or": [
+    {
+      "url": "https://example.com",
+      "position": 23
+    }
+  ],
+  "asking": [
+    {
+      "url": "https://example.com",
+      "position": 24
+    }
+  ],
+  "permission.": [
+    {
+      "url": "https://example.com",
+      "position": 26
+    }
+  ],
+  "more": [
+    {
+      "url": "https://example.com",
+      "position": 27
+    }
+  ],
+  "information...": [
+    {
+      "url": "https://example.com",
+      "position": 28
+    }
+  ]
+}

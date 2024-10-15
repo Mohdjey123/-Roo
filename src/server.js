@@ -1,8 +1,8 @@
 // src/server.js
 const express = require('express');
 const path = require('path'); // Import path module
-const { crawl, crawlPage } = require('./crawler.js');
-const { addToIndex, saveIndex, loadIndex } = require('./indexer.js');
+const { crawl, crawlPage, crawledUrls, urlQueue } = require('./crawler.js');
+const { addToIndex, saveIndex, loadIndex, index } = require('./indexer.js');
 const { handleSearch } = require('./search.js');
 
 const app = express();
@@ -60,6 +60,20 @@ app.get('/search', async (req, res) => {
     }
     
     res.json(searchResults);
+});
+
+// Endpoint to get crawl status
+app.get('/crawl-status', (req, res) => {
+    res.json({
+        crawledUrls: Array.from(crawledUrls),
+        queueLength: urlQueue.length,
+        indexSize: Object.keys(index).length
+    });
+});
+
+// Status endpoint
+app.get('/status', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/html/status.html'));
 });
 
 // Start the server

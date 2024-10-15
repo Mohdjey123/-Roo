@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crawler Status</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Crawler Status</h1>
+    <div>
+        <h2>Crawled URLs: <span id="crawledCount"></span></h2>
+        <h2>Queue Length: <span id="queueLength"></span></h2>
+        <h2>Index Size: <span id="indexSize"></span></h2>
+    </div>
+    <canvas id="crawlChart"></canvas>
+
+    <script>
+        let chart;
+        let crawledCount = 0;
+
+        function updateStatus() {
+            fetch('/crawl-status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('crawledCount').textContent = data.crawledUrls.length;
+                    document.getElementById('queueLength').textContent = data.queueLength;
+                    document.getElementById('indexSize').textContent = data.indexSize;
+
+                    crawledCount = data.crawledUrls.length;
+                    updateChart();
+                });
+        }
+
+        function updateChart() {
+            if (!chart) {
+                const ctx = document.getElementById('crawlChart').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Crawled URLs',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    }
+                });
+            }
+
+            const now = new Date();
+            chart.data.labels.push(now.toLocaleTimeString());
+            chart.data.datasets[0].data.push(crawledCount);
+
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+        }
+
+        setInterval(updateStatus, 5000); // Update every 5 seconds
+    </script>
+</body>
+</html>

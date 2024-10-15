@@ -67,10 +67,13 @@ function normalizeUrl(baseUrl, url) {
 async function crawl(startUrl, maxPages = 10) {
     urlQueue.push(startUrl);
     
+    console.log(`Starting crawl from ${startUrl}, max pages: ${maxPages}`);
+    
     while (urlQueue.length > 0 && crawledUrls.size < maxPages) {
         const currentUrl = urlQueue.shift();
         
         if (crawledUrls.has(currentUrl)) {
+            console.log(`Skipping already crawled URL: ${currentUrl}`);
             continue;
         }
         
@@ -79,21 +82,31 @@ async function crawl(startUrl, maxPages = 10) {
         
         if (pageData) {
             crawledUrls.add(currentUrl);
+            console.log(`Successfully crawled: ${currentUrl}`);
+            console.log(`Title: ${pageData.title}`);
+            console.log(`Text length: ${pageData.text.length} characters`);
+            console.log(`Links found: ${pageData.links.length}`);
             
-            // Process the page data (e.g., add to index)
             await addToIndex(pageData.text, pageData.url);
             
-            // Add new URLs to the queue
             pageData.links.forEach(link => {
                 const normalizedUrl = normalizeUrl(currentUrl, link);
                 if (normalizedUrl.startsWith('http') && !crawledUrls.has(normalizedUrl)) {
+                    console.log(`Adding to queue: ${normalizedUrl}`);
                     urlQueue.push(normalizedUrl);
                 }
             });
+        } else {
+            console.error(`Failed to crawl: ${currentUrl}`);
         }
     }
     
     console.log(`Crawling complete. Crawled ${crawledUrls.size} pages.`);
 }
 
-module.exports = { crawl, crawlPage };
+module.exports = { 
+    crawl, 
+    crawlPage, 
+    crawledUrls, 
+    urlQueue 
+};

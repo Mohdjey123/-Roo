@@ -1,10 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
-const { promisify } = require('util');
-
-const gzip = promisify(zlib.gzip);
-const gunzip = promisify(zlib.gunzip);
+const zstd = require('node-zstandard');
 
 const indexFilePath = path.join(__dirname, '../data/index.json');
 
@@ -39,16 +35,13 @@ async function addToIndex(text, url) {
        }
 
        // Store or update snippet for the URL
-       const snippet = words.slice(0, 20).join(' ');
-       const compressedSnippet = await gzip(snippet);
+       const snippet = words.slice(0, 30).join(' '); // Increased to 30 words for a longer snippet
+       const compressedSnippet = await zstd.compress(Buffer.from(snippet));
        if (!index[url]) {
            index[url] = { compressedSnippet, wordCount: words.length };
        } else {
            index[url].wordCount += words.length;
-           // Optionally update snippet if this one is longer
-           if (snippet.length > (await gunzip(index[url].compressedSnippet)).length) {
-               index[url].compressedSnippet = compressedSnippet;
-           }
+           index[url].compressedSnippet = compressedSnippet; // Always update the snippet
        }
 
        console.log(`Indexed ${words.length} words and ${phrases.length} phrases from ${url}`);
@@ -75,12 +68,22 @@ async function search(query) {
 
    const sortedResults = await Promise.all(Object.entries(results)
        .sort((a, b) => b[1].score - a[1].score)
-       .map(async ([url, data]) => ({
-           url,
-           score: data.score,
-           positions: data.positions,
-           snippet: index[url] ? await gunzip(index[url].compressedSnippet) : "No snippet available"
-       })));
+       .map(async ([url, data]) => {
+           let snippet = "No snippet available.";
+           if (index[url] && index[url].compressedSnippet) {
+               try {
+                   snippet = (await zstd.decompress(index[url].compressedSnippet)).toString();
+               } catch (error) {
+                   console.error(`Error decompressing snippet for ${url}:`, error.message);
+               }
+           }
+           return {
+               url,
+               score: data.score,
+               positions: data.positions,
+               snippet: snippet
+           };
+       }));
 
    console.log(`Searching for "${query}", found ${sortedResults.length} results`);
    return sortedResults;
@@ -88,24 +91,34 @@ async function search(query) {
 
 // Save the index to a file
 async function saveIndex() {
-    fs.writeFileSync(indexFilePath, JSON.stringify(index));
-    console.log('Index saved to file');
+    try {
+        const compressedIndex = await zstd.compress(Buffer.from(JSON.stringify(index)));
+        fs.writeFileSync(indexFilePath, compressedIndex);
+        console.log('Compressed index saved to file');
+    } catch (error) {
+        console.error('Error saving index:', error.message);
+    }
 }
 
 // Load the index from a file
 async function loadIndex() {
-    if (fs.existsSync(indexFilePath)) {
-        try {
-            const data = fs.readFileSync(indexFilePath, 'utf8');
-            Object.assign(index, JSON.parse(data));
-            console.log('Index loaded successfully');
-        } catch (error) {
-            console.error('Error loading index:', error.message);
-            console.log('Starting with an empty index.');
-        }
-    } else {
-        console.log('No existing index file found. Starting with an empty index.');
-    }
+   if (fs.existsSync(indexFilePath)) {
+       try {
+           const compressedData = fs.readFileSync(indexFilePath);
+           const data = await zstd.decompress(compressedData);
+           if (data.length === 0) {
+               console.log('Index file is empty. Starting with an empty index.');
+           } else {
+               Object.assign(index, JSON.parse(data.toString()));
+               console.log('Index loaded successfully');
+           }
+       } catch (error) {
+           console.error('Error loading index from file:', error.message);
+           console.log('Starting with an empty index.');
+       }
+   } else {
+       console.log('No existing index file found. Starting with an empty index.');
+   }
 }
 
 // Helper functions
@@ -118,4 +131,4 @@ function isStopWord(word) {
     return stopWords.has(word);
 }
 
-module.exports = { addToIndex, search, saveIndex, loadIndex };
+module.exports = { addToIndex, search, saveIndex, loadIndex, index };

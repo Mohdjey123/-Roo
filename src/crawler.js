@@ -87,7 +87,11 @@ async function crawl(startUrl, maxPages = 10) {
             console.log(`Text length: ${pageData.text.length} characters`);
             console.log(`Links found: ${pageData.links.length}`);
             
-            await addToIndex(pageData.text, pageData.url);
+            try {
+                await addToIndex(pageData.text, pageData.url);
+            } catch (error) {
+                console.error(`Error adding to index: ${error.message}`);
+            }
             
             pageData.links.forEach(link => {
                 const normalizedUrl = normalizeUrl(currentUrl, link);
@@ -102,6 +106,11 @@ async function crawl(startUrl, maxPages = 10) {
     }
     
     console.log(`Crawling complete. Crawled ${crawledUrls.size} pages.`);
+    try {
+        await saveIndex();
+    } catch (error) {
+        console.error(`Error saving index: ${error.message}`);
+    }
 }
 
 module.exports = { 

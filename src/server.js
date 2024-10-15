@@ -9,7 +9,14 @@ const app = express();
 const PORT = 3000;
 
 // Load the index if it exists
-loadIndex();
+(async () => {
+    await loadIndex();
+    
+    // Start the server
+    app.listen(PORT, () => {
+        console.log(`Roo search engine running on http://localhost:${PORT}`);
+    });
+})();
 
 // Serve static files from the public directory
 app.use(express.static('public'));
@@ -74,9 +81,4 @@ app.get('/crawl-status', (req, res) => {
 // Status endpoint
 app.get('/status', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/html/status.html'));
-});
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Roo search engine running on http://localhost:${PORT}`);
 });

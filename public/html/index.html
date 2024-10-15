@@ -5,39 +5,51 @@
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>Roo Search Engine</title>
-   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+   <link rel="stylesheet" href="/css/main.css">
 </head>
 
 <body>
    <div class="container mt-5">
-      <h1 class="text-center">Welcome to Roo Search Engine</h1>
-      <form id="searchForm" class="d-flex justify-content-center mt-4">
-         <input type="text" id="query" class="form-control me-2" placeholder="Enter your search term" required>
-         <button type="submit" class="btn btn-primary">Search</button>
-      </form>
+      <div class="search-container text-center">
+         <a href="/" class="logo mb-4 d-inline-block">Roo</a>
+         <form id="searchForm" class="search-form d-flex mt-4">
+            <input type="text" id="query" class="search-input" placeholder="Search the web" required>
+            <button type="submit" class="search-button">Search</button>
+         </form>
+      </div>
       <div id="results" class="mt-4"></div>
    </div>
 
    <script>
       const form = document.getElementById('searchForm');
       form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const query = document.getElementById('query').value;
-          const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
-          const data = await response.json();
-          const resultsDiv = document.getElementById('results');
-          resultsDiv.innerHTML = `<h4>Results for "${data.query}":</h4>`;
+         e.preventDefault();
+         const query = document.getElementById('query').value;
+         const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+         const data = await response.json();
 
-          if (Object.keys(data.results).length > 0) {
-              for (const url in data.results) {
-                  const positions = data.results[url].join(', ');
-                  resultsDiv.innerHTML += `<p><a href="${url}" target="_blank">${url}</a> (Found at positions: ${positions})</p>`;
-              }
-          } else {
-              resultsDiv.innerHTML += '<p>No results found.</p>';
-          }
+         const resultsDiv = document.getElementById('results');
+         resultsDiv.innerHTML = `<h4 class="mb-4">Results for "${data.query}":</h4>`;
+
+         if (data.results && data.results.length > 0) {
+            data.results.forEach(result => {
+               const snippet = result.snippet || "No snippet available.";
+               const highlightedSnippet = snippet.replace(new RegExp(query, 'gi'), `<mark>$&</mark>`);
+
+               resultsDiv.innerHTML += `
+                      <div class="result">
+                         <h5><a href="${result.url}" target="_blank">${result.url}</a></h5>
+                         <p class="result-url">${result.url}</p>
+                         <p class="result-snippet">${highlightedSnippet}</p>
+                      </div>
+                   `;
+            });
+         } else {
+            resultsDiv.innerHTML += '<p>No results found.</p>';
+         }
       });
-  </script>
+   </script>
 </body>
 
 </html>

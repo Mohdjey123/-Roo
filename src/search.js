@@ -1,24 +1,17 @@
-// search.js
-const { search } = require('./indexer');
+const { search } = require('./indexer'); // Import the search function from indexer
 
 // Function to handle search requests
-function handleSearch(query) {
-    if (!query) {
+async function handleSearch(query) {
+    // Validate the query
+    if (!query || query.trim() === "") {
         return { error: 'Query parameter is required' };
     }
 
-    const results = search(query);
+    // Search the index for the given query
+    const results = await search(query);
 
-    // Format results as needed, e.g., grouping by URL
-    const groupedResults = results.reduce((acc, { url, position }) => {
-        if (!acc[url]) {
-            acc[url] = [];
-        }
-        acc[url].push(position); // Add positions to the corresponding URL
-        return acc;
-    }, {});
-
-    return { query, results: groupedResults };
+    // Return the results
+    return { query, results };
 }
 
 module.exports = { handleSearch };

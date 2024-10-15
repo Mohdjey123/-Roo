@@ -1,0 +1,64 @@
+body {
+    background-color: #f8f9fa;
+    color: #333;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.search-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.logo {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #007bff;
+    text-decoration: none;
+}
+
+.search-form {
+    background-color: white;
+    border-radius: 24px;
+    padding: 6px;
+    box-shadow: 0 1px 6px rgba(32,33,36,.28);
+}
+
+.search-input {
+    border: none;
+    outline: none;
+    width: 100%;
+    padding: 10px 20px;
+}
+
+.search-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 24px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.search-button:hover {
+    background-color: #0056b3;
+}
+
+.result {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+}
+
+.result-url {
+    color: #006621;
+    font-size: 0.9rem;
+}
+
+.result-snippet {
+    color: #545454;
+    font-size: 0.9rem;
+}
+

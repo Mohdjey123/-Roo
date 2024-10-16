@@ -3,28 +3,21 @@ const cheerio = require('cheerio');
 const { addToIndex, saveIndex, index } = require('./indexer.js');
 const urlParser = require('url');
 
-// Set to store already crawled URLs
 const crawledUrls = new Set();
-
-// Queue to store URLs to be crawled
 const urlQueue = [];
 
-// Function to crawl a single page
 async function crawlPage(url) {
     try {
         const response = await axios.get(url, {
             headers: {
                 'User-Agent': 'RooBot/1.0 (https://github.com/Mohdjey123/RooSearch)'
             },
-            timeout: 10000 // 10 seconds timeout
+            timeout: 10000
         });
         const html = response.data;
         const $ = cheerio.load(html);
 
-        // Extract text content
         const text = $('body').text();
-
-        // Extract links
         const links = [];
         $('a').each((i, element) => {
             const href = $(element).attr('href');
@@ -43,7 +36,6 @@ async function crawlPage(url) {
     }
 }
 
-// Main crawling function
 async function crawl(seedUrls, maxPages = 50) {
     if (!Array.isArray(seedUrls)) {
         console.error('seedUrls must be an array');
@@ -75,8 +67,8 @@ async function crawl(seedUrls, maxPages = 50) {
             }
         }
 
-        // Add a delay to be respectful to servers
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Add a delay between crawls
+        await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     console.log(`Crawl completed. Crawled ${crawledUrls.size} pages.`);

@@ -16,6 +16,11 @@ body {
     text-decoration: none;
 }
 
+.logo {
+    width: 100px;  /* or whatever size you want */
+    height: auto;  /* maintains aspect ratio */
+}
+
 .search-form {
     background-color: white;
     border-radius: 24px;

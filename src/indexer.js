@@ -9,39 +9,51 @@ const decompress = util.promisify(zlib.brotliDecompress);
 const indexFilePath = path.join(__dirname, '../data/index.br');
 
 // Define the in-memory index
-let index = {};
+const index = {};
 
-function addToIndex(text, url) {
-    index[url] = { text };
+async function addToIndex(text, url) {
+   try {
+       const words = tokenize(text);
+       const wordSet = new Set(words);
+       let uniqueWordsIndexed = 0;
+
+       for (const word of wordSet) {
+           if (!isStopWord(word)) {
+               if (!index[word]) {
+                   index[word] = [];
+               }
+               index[word].push({ url, position: words.indexOf(word) });
+               uniqueWordsIndexed++;
+           }
+       }
+
+       // Store compressed snippet for the URL
+       const snippet = words.slice(0, 30).join(' ');
+       const compressedSnippet = await compress(Buffer.from(snippet));
+       index[url] = { compressedSnippet: compressedSnippet.toString('base64'), wordCount: words.length };
+
+       console.log(`Indexed ${uniqueWordsIndexed} unique words from ${url}`);
+   } catch (error) {
+       console.error(`Error indexing content from ${url}:`, error.message);
+   }
 }
 
 async function search(query) {
     const queryTerms = tokenize(query.toLowerCase());
+    console.log('Query terms:', queryTerms);
+    console.log('Index keys:', Object.keys(index));
     const results = {};
 
     for (const term of queryTerms) {
-        for (const [indexTerm, entries] of Object.entries(index)) {
-            if (indexTerm.includes(term) || term.includes(indexTerm)) {
-                if (Array.isArray(entries)) {
-                    for (const entry of entries) {
-                        if (!results[entry.url]) {
-                            results[entry.url] = { score: 0, positions: [] };
-                        }
-                        results[entry.url].score++;
-                        results[entry.url].positions.push(entry.position);
-                    }
-                } else if (typeof entries === 'object' && entries.url) {
-                    // Handle the case where entries is a single object
-                    const url = entries.url;
-                    if (!results[url]) {
-                        results[url] = { score: 0, positions: [] };
-                    }
-                    results[url].score++;
-                    if (entries.position) {
-                        results[url].positions.push(entries.position);
-                    }
+        if (isStopWord(term)) continue;  // Skip stop words in the query
+
+        if (index[term] && Array.isArray(index[term])) {
+            for (const entry of index[term]) {
+                if (!results[entry.url]) {
+                    results[entry.url] = { score: 0, positions: [] };
                 }
-                // If entries is neither an array nor an object with a url property, we skip it
+                results[entry.url].score++;
+                results[entry.url].positions.push(entry.position);
             }
         }
     }
@@ -52,7 +64,8 @@ async function search(query) {
             let snippet = "No snippet available.";
             if (index[url] && index[url].compressedSnippet) {
                 try {
-                    snippet = (await decompress(index[url].compressedSnippet)).toString();
+                    const compressedBuffer = Buffer.from(index[url].compressedSnippet, 'base64');
+                    snippet = (await decompress(compressedBuffer)).toString();
                 } catch (error) {
                     console.error(`Error decompressing snippet for ${url}:`, error.message);
                 }
@@ -72,6 +85,7 @@ async function search(query) {
 async function saveIndex() {
     try {
         const indexString = JSON.stringify(index);
+        console.log('Index before saving:', index);
         const compressedIndex = await compress(Buffer.from(indexString));
         await fs.writeFile(indexFilePath, compressedIndex);
         console.log('Compressed index saved to file');

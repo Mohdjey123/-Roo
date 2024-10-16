@@ -9,6 +9,11 @@ const PORT = 3000;
 
 app.use(express.static('public'));
 
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/html/index.html'));
 });
@@ -16,7 +21,7 @@ app.get('/', (req, res) => {
 app.get('/search', async (req, res) => {
     const query = req.query.q;
     if (!query) {
-        return res.status(400).send('Query parameter is required');
+        return res.status(400).json({ error: 'Query parameter is required' });
     }
     try {
         console.log(`Searching for: "${query}"`);
@@ -33,7 +38,7 @@ app.get('/crawl', async (req, res) => {
     console.log('Received crawl request with URL:', url);
     if (!url) {
         console.log('URL parameter is missing');
-        return res.status(400).send('URL parameter is required');
+        return res.status(400).json({ error: 'URL parameter is required' });
     }
     
     try {
@@ -42,13 +47,13 @@ app.get('/crawl', async (req, res) => {
         if (pageData) {
             await addToIndex(pageData.text, url);
             await saveIndex();
-            res.send(`Successfully crawled and indexed: ${url}`);
+            res.json({ message: `Successfully crawled and indexed: ${url}` });
         } else {
-            res.status(500).send(`Failed to crawl: ${url}`);
+            res.status(500).json({ error: `Failed to crawl: ${url}` });
         }
     } catch (error) {
         console.error(`Error crawling ${url}:`, error);
-        res.status(500).send(`Error crawling ${url}: ${error.message}`);
+        res.status(500).json({ error: `Error crawling ${url}: ${error.message}` });
     }
 });
 
@@ -72,7 +77,13 @@ async function startAutoCrawling() {
 }
 
 app.get('/view-index', (req, res) => {
-    res.json(index);
+    const wordCount = Object.keys(index).filter(key => Array.isArray(index[key])).length;
+    const urlCount = Object.keys(index).filter(key => index[key].compressedSnippet).length;
+    res.json({
+        totalEntries: Object.keys(index).length,
+        wordEntries: wordCount,
+        urlEntries: urlCount
+    });
 });
 
 app.get('/crawl-status', (req, res) => {
@@ -87,14 +98,33 @@ app.get('/status', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/html/status.html'));
 });
 
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
+
 (async () => {
     try {
         await loadIndex();
         app.listen(PORT, () => {
             console.log(`Roo search engine running on http://localhost:${PORT}`);
-            startAutoCrawling(); // Start automatic crawling after the server is running
+            if (Object.keys(index).length === 0) {
+                console.log('Index is empty. Starting automatic crawling...');
+                startAutoCrawling();
+            } else {
+                console.log('Index loaded. Ready for searches.');
+            }
         });
     } catch (error) {
         console.error('Error starting the server:', error);
     }
 })();
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+});

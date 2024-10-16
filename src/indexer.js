@@ -1,110 +1,72 @@
 const fs = require('fs').promises;
 const path = require('path');
-const brotli = require('iltorb');
+const zlib = require('zlib');
 const util = require('util');
 
-const compress = util.promisify(brotli.compress);
-const decompress = util.promisify(brotli.decompress);
+const compress = util.promisify(zlib.brotliCompress);
+const decompress = util.promisify(zlib.brotliDecompress);
 
 const indexFilePath = path.join(__dirname, '../data/index.br');
 
 // Define the in-memory index
-const index = {};
+let index = {};
 
-async function addToIndex(text, url) {
-   try {
-       const words = tokenize(text);
-       const phraseLength = 3;
-       const phrases = [];
-
-       // Index individual words and phrases
-       for (let i = 0; i < words.length; i++) {
-           const word = words[i].toLowerCase();
-           if (!isStopWord(word)) {
-               if (!index[word]) {
-                   index[word] = [];
-               }
-               index[word].push({ url, position: i });
-           }
-
-           if (i + phraseLength <= words.length) {
-               const phrase = words.slice(i, i + phraseLength).join(' ').toLowerCase();
-               if (!index[phrase]) {
-                   index[phrase] = [];
-               }
-               index[phrase].push({ url, position: i });
-               phrases.push(phrase);
-           }
-       }
-
-       // Store or update snippet for the URL
-       const snippet = words.slice(0, 30).join(' ');
-       const compressedSnippet = await compress(Buffer.from(snippet));
-       if (!index[url]) {
-           index[url] = { compressedSnippet, wordCount: words.length };
-       } else {
-           index[url].wordCount += words.length;
-           index[url].compressedSnippet = compressedSnippet;
-       }
-
-       console.log(`Indexed ${words.length} words and ${phrases.length} phrases from ${url}`);
-   } catch (error) {
-       console.error(`Error indexing content from ${url}:`, error.message);
-   }
+function addToIndex(text, url) {
+    index[url] = { text };
 }
 
 async function search(query) {
-   const queryTerms = tokenize(query.toLowerCase());
-   const results = {};
+    const queryTerms = tokenize(query.toLowerCase());
+    const results = {};
 
-   for (const term of queryTerms) {
-       for (const [indexTerm, entries] of Object.entries(index)) {
-           if (indexTerm.includes(term) || term.includes(indexTerm)) {
-               if (Array.isArray(entries)) {
-                   for (const entry of entries) {
-                       if (!results[entry.url]) {
-                           results[entry.url] = { score: 0, positions: [] };
-                       }
-                       results[entry.url].score++;
-                       results[entry.url].positions.push(entry.position);
-                   }
-               } else if (typeof entries === 'object' && entries.url) {
-                   // Handle the case where entries is a single object
-                   const url = entries.url;
-                   if (!results[url]) {
-                       results[url] = { score: 0, positions: [] };
-                   }
-                   results[url].score++;
-                   if (entries.position) {
-                       results[url].positions.push(entries.position);
-                   }
-               }
-               // If entries is neither an array nor an object with a url property, we skip it
-           }
-       }
-   }
+    for (const term of queryTerms) {
+        for (const [indexTerm, entries] of Object.entries(index)) {
+            if (indexTerm.includes(term) || term.includes(indexTerm)) {
+                if (Array.isArray(entries)) {
+                    for (const entry of entries) {
+                        if (!results[entry.url]) {
+                            results[entry.url] = { score: 0, positions: [] };
+                        }
+                        results[entry.url].score++;
+                        results[entry.url].positions.push(entry.position);
+                    }
+                } else if (typeof entries === 'object' && entries.url) {
+                    // Handle the case where entries is a single object
+                    const url = entries.url;
+                    if (!results[url]) {
+                        results[url] = { score: 0, positions: [] };
+                    }
+                    results[url].score++;
+                    if (entries.position) {
+                        results[url].positions.push(entries.position);
+                    }
+                }
+                // If entries is neither an array nor an object with a url property, we skip it
+            }
+        }
+    }
 
-   const sortedResults = await Promise.all(Object.entries(results)
-       .sort((a, b) => b[1].score - a[1].score)
-       .map(async ([url, data]) => {
-           let snippet = "No snippet available.";
-           if (index[url] && index[url].compressedSnippet) {
-               try {
-                   snippet = (await decompress(index[url].compressedSnippet)).toString();
-               } catch (error) {
-                   console.error(`Error decompressing snippet for ${url}:`, error.message);
-               }
-           }
-           return {
-               url,
-               score: data.score,
-               positions: data.positions,
-               snippet: snippet
-           };
-       }));
+    const sortedResults = await Promise.all(Object.entries(results)
+        .sort((a, b) => b[1].score - a[1].score)
+        .map(async ([url, data]) => {
+            let snippet = "No snippet available.";
+            if (index[url] && index[url].compressedSnippet) {
+                try {
+                    snippet = (await decompress(index[url].compressedSnippet)).toString();
+                } catch (error) {
+                    console.error(`Error decompressing snippet for ${url}:`, error.message);
+                }
+            }
+            return {
+                url,
+                score: data.score,
+                positions: data.positions,
+                snippet: snippet
+            };
+        }));
 
-   console.log(`Searching for "${query}", found ${sortedResults.length} results`);
-   return sortedResults;
+    console.log(`Searching for "${query}", found ${sortedResults.length} results`);
+    return sortedResults;
 }
 
 async function saveIndex() {

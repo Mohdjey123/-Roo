@@ -7,8 +7,10 @@ const { handleSearch } = require('./search.js');
 const app = express();
 const PORT = 3000;
 
+// Serve static files from the docs folder
+app.use(express.static('docs'));
+// Keep serving from public for other static assets
 app.use(express.static('public'));
-app.use(express.static('.'));  // Serve files from the root directory
 
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -16,7 +18,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../index.html'));
+    res.sendFile(path.join(__dirname, '../docs/index.html'));
 });
 
 app.get('/search', async (req, res) => {

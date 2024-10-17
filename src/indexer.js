@@ -44,23 +44,48 @@ async function addToIndex(text, url) {
 
 function getSnippet(text, query, snippetLength = 20) {
     const words = text.split(/\s+/);
-    const queryLower = query.toLowerCase();
+    const queryWords = query.toLowerCase().split(/\s+/);
     
-    // Find positions of the query in the text
+    // Find positions of the query words in the text
     const positions = words.reduce((acc, word, index) => {
-        if (word.toLowerCase().includes(queryLower)) {
+        if (queryWords.some(qw => word.toLowerCase().includes(qw))) {
             acc.push(index);
         }
         return acc;
     }, []);
 
     if (positions.length > 0) {
-        // Create a snippet based on the first occurrence
-        const start = Math.max(0, positions[0] - Math.floor(snippetLength / 2));
+        // Find the best snippet that includes the most query words
+        let bestStart = 0;
+        let bestScore = 0;
+
+        for (let i = 0; i < positions.length; i++) {
+            const start = Math.max(0, positions[i] - Math.floor(snippetLength / 2));
+            const end = Math.min(words.length, start + snippetLength);
+            const snippet = words.slice(start, end);
+            const score = queryWords.filter(qw => 
+                snippet.some(sw => sw.toLowerCase().includes(qw))
+            ).length;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestStart = start;
+            }
+        }
+
+        const start = bestStart;
         const end = Math.min(words.length, start + snippetLength);
+        const snippet = words.slice(start, end);
+
+        // Create an array of [word, shouldHighlight] pairs
+        const highlightedSnippet = snippet.map(word => [
+            word,
+            queryWords.some(qw => word.toLowerCase().includes(qw))
+        ]);
+
         return {
-            snippet: words.slice(start, end).join(' '),
-            positions: positions.filter(pos => pos >= start && pos < end).map(pos => pos - start)
+            snippet: highlightedSnippet,
+            ellipsis: end < words.length
         };
     }
 
@@ -89,24 +114,14 @@ async function search(query) {
     const sortedResults = await Promise.all(Object.entries(results)
         .sort((a, b) => b[1].score - a[1].score)
         .map(async ([url, data]) => {
-            if (!index[url]) {
-                console.error(`Missing index entry for URL: ${url}`);
-                return {
-                    url,
-                    score: data.score,
-                    positions: data.positions,
-                    snippet: "Snippet unavailable (missing index entry)",
-                    snippetPositions: []
-                };
-            }
-            if (!index[url].compressedText) {
+            if (!index[url] || !index[url].compressedText) {
                 console.error(`Missing compressed text for URL: ${url}`);
                 return {
                     url,
                     score: data.score,
                     positions: data.positions,
-                    snippet: "Snippet unavailable (missing compressed text)",
-                    snippetPositions: []
+                    snippet: [["Snippet unavailable (missing compressed text)", false]],
+                    ellipsis: false
                 };
             }
             try {
@@ -120,8 +135,8 @@ async function search(query) {
                     url,
                     score: data.score,
                     positions: data.positions,
-                    snippet: snippetData ? snippetData.snippet : "No relevant snippet found",
-                    snippetPositions: snippetData ? snippetData.positions : []
+                    snippet: snippetData ? snippetData.snippet : [["No relevant snippet found", false]],
+                    ellipsis: snippetData ? snippetData.ellipsis : false
                 };
             } catch (error) {
                 console.error(`Error decompressing text for ${url}:`, error.message);
@@ -129,8 +144,8 @@ async function search(query) {
                     url,
                     score: data.score,
                     positions: data.positions,
-                    snippet: `Snippet unavailable (decompression error: ${error.message})`,
-                    snippetPositions: []
+                    snippet: [[`Snippet unavailable (decompression error: ${error.message})`, false]],
+                    ellipsis: false
                 };
             }
         }));

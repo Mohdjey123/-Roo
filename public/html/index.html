@@ -36,14 +36,15 @@
 
          if (data.results && data.results.length > 0) {
             data.results.forEach(result => {
-               const snippet = result.snippet || "No snippet available.";
-               const highlightedSnippet = snippet.replace(new RegExp(query, 'gi'), `<mark>$&</mark>`);
+               const snippetHtml = result.snippet.map(([word, highlight]) => 
+                  highlight ? `<mark>${word}</mark>` : word
+               ).join(' ') + (result.ellipsis ? '...' : '');
 
                resultsDiv.innerHTML += `
                       <div class="result">
                          <h5><a href="${result.url}" target="_blank">${result.url}</a></h5>
                          <p class="result-url">${result.url}</p>
-                         <p class="result-snippet">${highlightedSnippet}</p>
+                         <p class="result-snippet">${snippetHtml}</p>
                       </div>
                    `;
             });

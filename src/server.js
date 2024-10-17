@@ -63,9 +63,15 @@ async function startAutoCrawling() {
         'https://www.bbc.com/news',
         'https://www.nasa.gov/',
         'https://www.gutenberg.org/',
-        'https://www.un.org/en/'
+        'https://www.un.org/en/',
+        'https://commons.wikimedia.org',
+        'https://web.archive.org',
+        'https://stackexchange.com',
+        'https://news.ycombinator.com',
+        'https://arxiv.org',
+        'https://pmc.ncbi.nlm.nih.gov'
     ];
-    const maxPages = 50;
+    const maxPages = 5000;
     const concurrency = 5;
 
     console.log(`Starting automatic crawl with ${seedUrls.length} seed URLs and max ${maxPages} pages`);

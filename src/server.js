@@ -71,7 +71,7 @@ async function startAutoCrawling() {
         'https://arxiv.org',
         'https://pmc.ncbi.nlm.nih.gov'
     ];
-    const maxPages = 250000;
+    const maxPages = 250;
     const concurrency = 5;
 
     console.log(`Starting automatic crawl with ${seedUrls.length} seed URLs and max ${maxPages} pages`);

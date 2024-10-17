@@ -22,12 +22,10 @@ async function addToIndex(text, url) {
        urlToContent[url] = await compress(Buffer.from(text));
 
        wordSet.forEach(word => {
-           if (!isStopWord(word)) {
-               if (!invertedIndex[word]) {
-                   invertedIndex[word] = new Set();
-               }
-               invertedIndex[word].add(url);
+           if (!invertedIndex[word]) {
+               invertedIndex[word] = new Set();
            }
+           invertedIndex[word].add(url);
        });
 
        // Initialize PageRank
@@ -122,15 +120,22 @@ async function search(query, page = 1, resultsPerPage = 10) {
 
     // Use the inverted index for faster lookups
     for (const term of queryTerms) {
-        if (isStopWord(term)) continue;
-
         const urls = invertedIndex[term] || new Set();
         for (const url of urls) {
             if (!results[url]) {
                 results[url] = { score: 0, termFrequency: {} };
             }
-            results[url].score += pageRank[url] || 1;
+            // Give less weight to stop words, but don't ignore them completely
+            const weight = isStopWord(term) ? 0.1 : 1;
+            results[url].score += (pageRank[url] || 1) * weight;
             results[url].termFrequency[term] = (results[url].termFrequency[term] || 0) + 1;
+        }
+    }
+
+    // If no results found and the query is a single stop word, return all documents
+    if (Object.keys(results).length === 0 && queryTerms.length === 1 && isStopWord(queryTerms[0])) {
+        for (const url in urlToContent) {
+            results[url] = { score: pageRank[url] || 1, termFrequency: {} };
         }
     }
 
@@ -138,7 +143,6 @@ async function search(query, page = 1, resultsPerPage = 10) {
     const idf = {};
     const N = Object.keys(urlToContent).length;
     for (const term of queryTerms) {
-        if (isStopWord(term)) continue;
         const df = (invertedIndex[term] || new Set()).size;
         idf[term] = Math.log(N / (df + 1));
     }
@@ -147,7 +151,8 @@ async function search(query, page = 1, resultsPerPage = 10) {
         let tfidfScore = 0;
         for (const term in results[url].termFrequency) {
             const tf = results[url].termFrequency[term];
-            tfidfScore += tf * idf[term];
+            const weight = isStopWord(term) ? 0.1 : 1;
+            tfidfScore += tf * idf[term] * weight;
         }
         results[url].score *= (1 + tfidfScore);
     }
@@ -288,4 +293,20 @@ function getIndexStats() {
     };
 }
 
-module.exports = { addToIndex, search, saveIndex, loadIndex, addLink, calculatePageRank, getIndexStats };
+function getRandomPages(count = 10) {
+    const urls = Object.keys(urlToContent);
+    const shuffled = urls.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+}
+
+module.exports = {
+    addToIndex,
+    search,
+    saveIndex,
+    loadIndex,
+    addLink,
+    calculatePageRank,
+    getIndexStats,
+    isStopWord,
+    getRandomPages
+};

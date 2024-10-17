@@ -23,11 +23,8 @@ app.get('/search', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const resultsPerPage = parseInt(req.query.perPage) || 10;
 
-    if (!query) {
-        return res.status(400).json({ error: 'Query parameter is required' });
-    }
     try {
-        console.log(`Searching for: "${query}" (Page ${page})`);
+        console.log(`Searching for: "${query || 'Feeling Lucky'}" (Page ${page})`);
         const searchResults = await handleSearch(query, page, resultsPerPage);
         res.json(searchResults);
     } catch (error) {

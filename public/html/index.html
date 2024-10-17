@@ -16,7 +16,7 @@
          <img src="/images/icon.png" class="logo">
          <a href="/" class="logo mb-4 d-inline-block">Roo</a>
          <form id="searchForm" class="search-form d-flex mt-4">
-            <input type="text" id="query" class="search-input" placeholder="Search the web" required>
+            <input type="text" id="query" class="search-input" placeholder="Search the web or leave empty for 'Feeling Lucky'">
             <button type="submit" class="search-button">Search</button>
          </form>
       </div>
@@ -126,7 +126,7 @@
          const url = new URL(window.location);
          const query = url.searchParams.get('q');
          const page = url.searchParams.get('page') || 1;
-         if (query) {
+         if (query !== null) {
             document.getElementById('query').value = query;
             performSearch(query, parseInt(page));
          }
@@ -137,7 +137,7 @@
          const url = new URL(window.location);
          const query = url.searchParams.get('q');
          const page = url.searchParams.get('page') || 1;
-         if (query) {
+         if (query !== null) {
             document.getElementById('query').value = query;
             performSearch(query, parseInt(page));
          } else {

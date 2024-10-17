@@ -27,21 +27,49 @@ async function addToIndex(text, url) {
            }
        }
 
-       // Store compressed snippet for the URL
-       const snippet = words.slice(0, 30).join(' ');
-       const compressedSnippet = await compress(Buffer.from(snippet));
-       index[url] = { compressedSnippet: compressedSnippet.toString('base64'), wordCount: words.length };
+       // Compress and store the full text
+       const compressedText = await compress(Buffer.from(text));
+       if (!index[url]) {
+           index[url] = {};
+       }
+       index[url].compressedText = compressedText;
+       index[url].wordCount = words.length;
 
        console.log(`Indexed ${uniqueWordsIndexed} unique words from ${url}`);
+       console.log(`Compressed text length for ${url}: ${compressedText.length} bytes`);
    } catch (error) {
        console.error(`Error indexing content from ${url}:`, error.message);
    }
 }
 
+function getSnippet(text, query, snippetLength = 20) {
+    const words = text.split(/\s+/);
+    const queryLower = query.toLowerCase();
+    
+    // Find positions of the query in the text
+    const positions = words.reduce((acc, word, index) => {
+        if (word.toLowerCase().includes(queryLower)) {
+            acc.push(index);
+        }
+        return acc;
+    }, []);
+
+    if (positions.length > 0) {
+        // Create a snippet based on the first occurrence
+        const start = Math.max(0, positions[0] - Math.floor(snippetLength / 2));
+        const end = Math.min(words.length, start + snippetLength);
+        return {
+            snippet: words.slice(start, end).join(' '),
+            positions: positions.filter(pos => pos >= start && pos < end).map(pos => pos - start)
+        };
+    }
+
+    return null; // Return null if no snippet can be created
+}
+
 async function search(query) {
     const queryTerms = tokenize(query.toLowerCase());
     console.log('Query terms:', queryTerms);
-    console.log('Index keys:', Object.keys(index));
     const results = {};
 
     for (const term of queryTerms) {
@@ -61,21 +89,50 @@ async function search(query) {
     const sortedResults = await Promise.all(Object.entries(results)
         .sort((a, b) => b[1].score - a[1].score)
         .map(async ([url, data]) => {
-            let snippet = "No snippet available.";
-            if (index[url] && index[url].compressedSnippet) {
-                try {
-                    const compressedBuffer = Buffer.from(index[url].compressedSnippet, 'base64');
-                    snippet = (await decompress(compressedBuffer)).toString();
-                } catch (error) {
-                    console.error(`Error decompressing snippet for ${url}:`, error.message);
-                }
+            if (!index[url]) {
+                console.error(`Missing index entry for URL: ${url}`);
+                return {
+                    url,
+                    score: data.score,
+                    positions: data.positions,
+                    snippet: "Snippet unavailable (missing index entry)",
+                    snippetPositions: []
+                };
             }
-            return {
-                url,
-                score: data.score,
-                positions: data.positions,
-                snippet: snippet
-            };
+            if (!index[url].compressedText) {
+                console.error(`Missing compressed text for URL: ${url}`);
+                return {
+                    url,
+                    score: data.score,
+                    positions: data.positions,
+                    snippet: "Snippet unavailable (missing compressed text)",
+                    snippetPositions: []
+                };
+            }
+            try {
+                const decompressedText = (await decompress(index[url].compressedText)).toString();
+                console.log(`Decompressed text length for ${url}: ${decompressedText.length} characters`);
+                const snippetData = getSnippet(decompressedText, query);
+                if (!snippetData) {
+                    console.log(`No relevant snippet found for ${url}`);
+                }
+                return {
+                    url,
+                    score: data.score,
+                    positions: data.positions,
+                    snippet: snippetData ? snippetData.snippet : "No relevant snippet found",
+                    snippetPositions: snippetData ? snippetData.positions : []
+                };
+            } catch (error) {
+                console.error(`Error decompressing text for ${url}:`, error.message);
+                return {
+                    url,
+                    score: data.score,
+                    positions: data.positions,
+                    snippet: `Snippet unavailable (decompression error: ${error.message})`,
+                    snippetPositions: []
+                };
+            }
         }));
 
     console.log(`Searching for "${query}", found ${sortedResults.length} results`);
@@ -84,9 +141,20 @@ async function search(query) {
 
 async function saveIndex() {
     try {
-        const indexString = JSON.stringify(index);
-        console.log('Index before saving:', index);
+        console.log('Preparing to save index...');
+        // Convert Buffer objects to base64 strings for JSON serialization
+        const serializableIndex = Object.fromEntries(
+            Object.entries(index).map(([key, value]) => [
+                key,
+                typeof value === 'object' && value.compressedText
+                    ? { ...value, compressedText: value.compressedText.toString('base64') }
+                    : value
+            ])
+        );
+        const indexString = JSON.stringify(serializableIndex);
+        console.log(`Index size before compression: ${indexString.length} bytes`);
         const compressedIndex = await compress(Buffer.from(indexString));
+        console.log(`Compressed index size: ${compressedIndex.length} bytes`);
         await fs.writeFile(indexFilePath, compressedIndex);
         console.log('Compressed index saved to file');
     } catch (error) {
@@ -96,11 +164,21 @@ async function saveIndex() {
 
 async function loadIndex() {
     try {
+        console.log('Loading index from file...');
         const compressedData = await fs.readFile(indexFilePath);
+        console.log(`Read ${compressedData.length} bytes of compressed data`);
         const decompressedData = await decompress(compressedData);
+        console.log(`Decompressed data size: ${decompressedData.length} bytes`);
         const indexData = JSON.parse(decompressedData.toString());
+        // Convert base64 strings back to Buffer objects
+        Object.entries(indexData).forEach(([key, value]) => {
+            if (typeof value === 'object' && value.compressedText) {
+                value.compressedText = Buffer.from(value.compressedText, 'base64');
+            }
+        });
         Object.assign(index, indexData);
         console.log('Index loaded successfully');
+        console.log(`Loaded ${Object.keys(index).length} entries into the index`);
     } catch (error) {
         if (error.code === 'ENOENT') {
             console.log('No existing index file found. Starting with an empty index.');

@@ -11,10 +11,11 @@
   "dependencies": {
     "axios": "^1.7.7",
     "cheerio": "^1.0.0",
+    "cli-progress": "^3.12.0",
     "express": "^4.21.1",
     "iltorb": "^2.4.5",
     "node-fetch": "^2.7.0"
   },
-  "devDependencies": {},
-  "description": ""
+  "description": "RooSearch is a lightweight, open-source search engine designed to crawl and index web pages. It allows for searching indexed content and provides basic web crawling capabilities.",
+  "devDependencies": {}
 }

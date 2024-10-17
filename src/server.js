@@ -66,10 +66,11 @@ async function startAutoCrawling() {
         'https://www.un.org/en/'
     ];
     const maxPages = 50;
+    const concurrency = 5;
 
     console.log(`Starting automatic crawl with ${seedUrls.length} seed URLs and max ${maxPages} pages`);
     try {
-        await crawl(seedUrls, maxPages);
+        await crawl(seedUrls, maxPages, concurrency);
         console.log('Automatic crawl completed and index saved.');
     } catch (error) {
         console.error('Error during automatic crawl:', error);

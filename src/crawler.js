@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { addToIndex, saveIndex, index } = require('./indexer.js');
 const urlParser = require('url');
+const cliProgress = require('cli-progress');
 
 const crawledUrls = new Set();
 const urlQueue = [];
@@ -17,7 +18,21 @@ async function crawlPage(url) {
         const html = response.data;
         const $ = cheerio.load(html);
 
-        const text = $('body').text();
+        // Remove unwanted elements
+        $('nav, header, footer, script, style').remove();
+        $('button, .btn, [role="button"]').remove();
+
+        // Extract text from the main content area
+        let text = '';
+        $('article, main, #content, .content, .main-content').each((i, elem) => {
+            text += $(elem).text() + ' ';
+        });
+
+        // If no main content area is found, fall back to body text
+        if (!text.trim()) {
+            text = $('body').text();
+        }
+
         const links = [];
         $('a').each((i, element) => {
             const href = $(element).attr('href');
@@ -29,14 +44,14 @@ async function crawlPage(url) {
             }
         });
 
-        return { text, links, url };
+        return { text: text.trim(), links, url };
     } catch (error) {
         console.error(`Error crawling ${url}:`, error.message);
         return null;
     }
 }
 
-async function crawl(seedUrls, maxPages = 50) {
+async function crawl(seedUrls, maxPages = 10000, concurrency = 5) {
     if (!Array.isArray(seedUrls)) {
         console.error('seedUrls must be an array');
         return;
@@ -44,34 +59,65 @@ async function crawl(seedUrls, maxPages = 50) {
 
     urlQueue.push(...seedUrls);
 
-    while (urlQueue.length > 0 && crawledUrls.size < maxPages) {
-        const url = urlQueue.shift();
-        if (crawledUrls.has(url) || index[url]) {
-            continue;
-        }
+    const progressBar = new cliProgress.SingleBar({
+        format: 'Crawling Progress |{bar}| {percentage}% | ETA: {eta}s | {value}/{total} pages',
+        barCompleteChar: '\u2588',
+        barIncompleteChar: '\u2591',
+        hideCursor: true
+    });
 
-        console.log(`Crawling: ${url}`);
-        const pageData = await crawlPage(url);
+    progressBar.start(maxPages, 0);
 
-        if (pageData) {
-            crawledUrls.add(url);
-            await addToIndex(pageData.text, url);
-            console.log(`Successfully crawled and indexed: ${url}`);
-            console.log(`Text length: ${pageData.text.length} characters`);
-            console.log(`Found ${pageData.links.length} links`);
+    const startTime = Date.now();
 
-            for (const link of pageData.links) {
-                if (!crawledUrls.has(link) && !urlQueue.includes(link) && !index[link]) {
-                    urlQueue.push(link);
-                }
+    async function processBatch() {
+        const batch = urlQueue.splice(0, concurrency);
+        const promises = batch.map(async (url) => {
+            if (crawledUrls.has(url) || index[url]) {
+                return;
             }
-        }
 
-        // Add a delay between crawls
-        await new Promise(resolve => setTimeout(resolve, 2000));
+            const pageData = await crawlPage(url);
+
+            if (pageData) {
+                crawledUrls.add(url);
+                await addToIndex(pageData.text, url);
+
+                for (const link of pageData.links) {
+                    if (!crawledUrls.has(link) && !urlQueue.includes(link) && !index[link]) {
+                        urlQueue.push(link);
+                    }
+                }
+
+                progressBar.increment();
+            }
+
+            // Add a short delay between crawls
+            await new Promise(resolve => setTimeout(resolve, 500));
+        });
+
+        await Promise.all(promises);
     }
 
-    console.log(`Crawl completed. Crawled ${crawledUrls.size} pages.`);
+    let lastSaveTime = Date.now();
+    const saveInterval = 5 * 60 * 1000; // 5 minutes
+
+    while (urlQueue.length > 0 && crawledUrls.size < maxPages) {
+        await processBatch();
+
+        // Save index periodically
+        if (Date.now() - lastSaveTime > saveInterval) {
+            await saveIndex();
+            lastSaveTime = Date.now();
+        }
+    }
+
+    progressBar.stop();
+
+    const endTime = Date.now();
+    const totalTime = (endTime - startTime) / 1000; // in seconds
+
+    console.log(`\nCrawl completed. Crawled ${crawledUrls.size} pages in ${totalTime.toFixed(2)} seconds.`);
     await saveIndex();
 }
 

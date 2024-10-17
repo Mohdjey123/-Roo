@@ -38,6 +38,12 @@
          const response = await fetch(`/search?q=${encodeURIComponent(query)}&page=${page}`);
          const data = await response.json();
 
+         // Update URL with search query and page number
+         const url = new URL(window.location);
+         url.searchParams.set('q', query);
+         url.searchParams.set('page', page);
+         window.history.pushState({}, '', url);
+
          resultsDiv.innerHTML = `<h4 class="mb-4">Results for "${data.query}" (${data.totalResults} results):</h4>`;
 
          if (data.results && data.results.length > 0) {
@@ -113,6 +119,31 @@
          e.preventDefault();
          const query = document.getElementById('query').value;
          performSearch(query);
+      });
+
+      // Handle initial load with search parameters
+      window.addEventListener('load', () => {
+         const url = new URL(window.location);
+         const query = url.searchParams.get('q');
+         const page = url.searchParams.get('page') || 1;
+         if (query) {
+            document.getElementById('query').value = query;
+            performSearch(query, parseInt(page));
+         }
+      });
+
+      // Handle browser back/forward buttons
+      window.addEventListener('popstate', () => {
+         const url = new URL(window.location);
+         const query = url.searchParams.get('q');
+         const page = url.searchParams.get('page') || 1;
+         if (query) {
+            document.getElementById('query').value = query;
+            performSearch(query, parseInt(page));
+         } else {
+            resultsDiv.innerHTML = '';
+            paginationDiv.innerHTML = '';
+         }
       });
    </script>
 </body>

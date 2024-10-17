@@ -1,6 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { addToIndex, saveIndex, index } = require('./indexer.js');
+const { addToIndex, saveIndex, addLink } = require('./indexer.js');
 const urlParser = require('url');
 const cliProgress = require('cli-progress');
 
@@ -40,6 +40,7 @@ async function crawlPage(url) {
                 const fullUrl = new URL(href, url).href;
                 if (fullUrl.startsWith('http')) {
                     links.push(fullUrl);
+                    addLink(url, fullUrl);
                 }
             }
         });
@@ -73,7 +74,7 @@ async function crawl(seedUrls, maxPages = 10000, concurrency = 5) {
     async function processBatch() {
         const batch = urlQueue.splice(0, concurrency);
         const promises = batch.map(async (url) => {
-            if (crawledUrls.has(url) || index[url]) {
+            if (crawledUrls.has(url)) {
                 return;
             }
 
@@ -84,7 +85,7 @@ async function crawl(seedUrls, maxPages = 10000, concurrency = 5) {
                 await addToIndex(pageData.text, url);
 
                 for (const link of pageData.links) {
-                    if (!crawledUrls.has(link) && !urlQueue.includes(link) && !index[link]) {
+                    if (!crawledUrls.has(link) && !urlQueue.includes(link)) {
                         urlQueue.push(link);
                     }
                 }

@@ -8,38 +8,61 @@ const decompress = util.promisify(zlib.brotliDecompress);
 
 const indexFilePath = path.join(__dirname, '../data/index.br');
 
-// Define the in-memory index
-const index = {};
+// Define the in-memory index structures
+const invertedIndex = {};
+const urlToContent = {};
+const pageRank = {};
+const incomingLinks = {};
 
 async function addToIndex(text, url) {
    try {
        const words = tokenize(text);
        const wordSet = new Set(words);
-       let uniqueWordsIndexed = 0;
 
-       for (const word of wordSet) {
+       urlToContent[url] = await compress(Buffer.from(text));
+
+       wordSet.forEach(word => {
            if (!isStopWord(word)) {
-               if (!index[word]) {
-                   index[word] = [];
+               if (!invertedIndex[word]) {
+                   invertedIndex[word] = new Set();
                }
-               index[word].push({ url, position: words.indexOf(word) });
-               uniqueWordsIndexed++;
+               invertedIndex[word].add(url);
            }
+       });
+
+       // Initialize PageRank
+       if (!pageRank[url]) {
+           pageRank[url] = 1.0;
        }
 
-       // Compress and store the full text
-       const compressedText = await compress(Buffer.from(text));
-       if (!index[url]) {
-           index[url] = {};
-       }
-       index[url].compressedText = compressedText;
-       index[url].wordCount = words.length;
-
-       console.log(`Indexed ${uniqueWordsIndexed} unique words from ${url}`);
-       console.log(`Compressed text length for ${url}: ${compressedText.length} bytes`);
+       console.log(`Indexed ${wordSet.size} unique words from ${url}`);
    } catch (error) {
        console.error(`Error indexing content from ${url}:`, error.message);
    }
+}
+
+function addLink(fromUrl, toUrl) {
+    if (!incomingLinks[toUrl]) {
+        incomingLinks[toUrl] = new Set();
+    }
+    incomingLinks[toUrl].add(fromUrl);
+}
+
+function calculatePageRank(iterations = 20, dampingFactor = 0.85) {
+    const urls = Object.keys(pageRank);
+    const n = urls.length;
+
+    for (let i = 0; i < iterations; i++) {
+        const newRanks = {};
+        for (const url of urls) {
+            let sum = 0;
+            for (const incomingUrl of (incomingLinks[url] || [])) {
+                sum += pageRank[incomingUrl] / (incomingLinks[incomingUrl] || []).size;
+            }
+            newRanks[url] = (1 - dampingFactor) / n + dampingFactor * sum;
+        }
+        Object.assign(pageRank, newRanks);
+    }
 }
 
 function getSnippet(text, query, snippetLength = 20) {
@@ -97,44 +120,56 @@ async function search(query) {
     console.log('Query terms:', queryTerms);
     const results = {};
 
+    // Use the inverted index for faster lookups
     for (const term of queryTerms) {
-        if (isStopWord(term)) continue;  // Skip stop words in the query
+        if (isStopWord(term)) continue;
 
-        if (index[term] && Array.isArray(index[term])) {
-            for (const entry of index[term]) {
-                if (!results[entry.url]) {
-                    results[entry.url] = { score: 0, positions: [] };
-                }
-                results[entry.url].score++;
-                results[entry.url].positions.push(entry.position);
+        const urls = invertedIndex[term] || new Set();
+        for (const url of urls) {
+            if (!results[url]) {
+                results[url] = { score: 0, termFrequency: {} };
             }
+            results[url].score += pageRank[url] || 1;
+            results[url].termFrequency[term] = (results[url].termFrequency[term] || 0) + 1;
         }
+    }
+
+    // Calculate TF-IDF scores
+    const idf = {};
+    const N = Object.keys(urlToContent).length;
+    for (const term of queryTerms) {
+        if (isStopWord(term)) continue;
+        const df = (invertedIndex[term] || new Set()).size;
+        idf[term] = Math.log(N / (df + 1));
+    }
+
+    for (const url in results) {
+        let tfidfScore = 0;
+        for (const term in results[url].termFrequency) {
+            const tf = results[url].termFrequency[term];
+            tfidfScore += tf * idf[term];
+        }
+        results[url].score *= (1 + tfidfScore);
     }
 
     const sortedResults = await Promise.all(Object.entries(results)
         .sort((a, b) => b[1].score - a[1].score)
         .map(async ([url, data]) => {
-            if (!index[url] || !index[url].compressedText) {
+            if (!urlToContent[url]) {
                 console.error(`Missing compressed text for URL: ${url}`);
                 return {
                     url,
                     score: data.score,
-                    positions: data.positions,
                     snippet: [["Snippet unavailable (missing compressed text)", false]],
                     ellipsis: false
                 };
             }
             try {
-                const decompressedText = (await decompress(index[url].compressedText)).toString();
-                console.log(`Decompressed text length for ${url}: ${decompressedText.length} characters`);
+                const decompressedText = (await decompress(Buffer.from(urlToContent[url]))).toString();
                 const snippetData = getSnippet(decompressedText, query);
-                if (!snippetData) {
-                    console.log(`No relevant snippet found for ${url}`);
-                }
                 return {
                     url,
                     score: data.score,
-                    positions: data.positions,
                     snippet: snippetData ? snippetData.snippet : [["No relevant snippet found", false]],
                     ellipsis: snippetData ? snippetData.ellipsis : false
                 };
@@ -143,7 +178,6 @@ async function search(query) {
                 return {
                     url,
                     score: data.score,
-                    positions: data.positions,
                     snippet: [[`Snippet unavailable (decompression error: ${error.message})`, false]],
                     ellipsis: false
                 };
@@ -157,16 +191,13 @@ async function search(query) {
 async function saveIndex() {
     try {
         console.log('Preparing to save index...');
-        // Convert Buffer objects to base64 strings for JSON serialization
-        const serializableIndex = Object.fromEntries(
-            Object.entries(index).map(([key, value]) => [
-                key,
-                typeof value === 'object' && value.compressedText
-                    ? { ...value, compressedText: value.compressedText.toString('base64') }
-                    : value
-            ])
-        );
-        const indexString = JSON.stringify(serializableIndex);
+        const data = {
+            invertedIndex: Object.fromEntries(Object.entries(invertedIndex).map(([k, v]) => [k, Array.from(v)])),
+            urlToContent: Object.fromEntries(Object.entries(urlToContent).map(([k, v]) => [k, v.toString('base64')])),
+            pageRank,
+            incomingLinks: Object.fromEntries(Object.entries(incomingLinks).map(([k, v]) => [k, Array.from(v)]))
+        };
+        const indexString = JSON.stringify(data);
         console.log(`Index size before compression: ${indexString.length} bytes`);
         const compressedIndex = await compress(Buffer.from(indexString));
         console.log(`Compressed index size: ${compressedIndex.length} bytes`);
@@ -184,16 +215,21 @@ async function loadIndex() {
         console.log(`Read ${compressedData.length} bytes of compressed data`);
         const decompressedData = await decompress(compressedData);
         console.log(`Decompressed data size: ${decompressedData.length} bytes`);
-        const indexData = JSON.parse(decompressedData.toString());
-        // Convert base64 strings back to Buffer objects
-        Object.entries(indexData).forEach(([key, value]) => {
-            if (typeof value === 'object' && value.compressedText) {
-                value.compressedText = Buffer.from(value.compressedText, 'base64');
-            }
+        const { invertedIndex: loadedIndex, urlToContent: loadedContent, pageRank: loadedPageRank, incomingLinks: loadedIncomingLinks } = JSON.parse(decompressedData.toString());
+        
+        Object.entries(loadedIndex).forEach(([word, urls]) => {
+            invertedIndex[word] = new Set(urls);
         });
-        Object.assign(index, indexData);
+        Object.entries(loadedContent).forEach(([url, content]) => {
+            urlToContent[url] = Buffer.from(content, 'base64');
+        });
+        Object.assign(pageRank, loadedPageRank);
+        Object.entries(loadedIncomingLinks).forEach(([url, links]) => {
+            incomingLinks[url] = new Set(links);
+        });
+
         console.log('Index loaded successfully');
-        console.log(`Loaded ${Object.keys(index).length} entries into the index`);
+        console.log(`Loaded ${Object.keys(invertedIndex).length} words and ${Object.keys(urlToContent).length} URLs into the index`);
     } catch (error) {
         if (error.code === 'ENOENT') {
             console.log('No existing index file found. Starting with an empty index.');
@@ -232,4 +268,12 @@ function isStopWord(word) {
     return stopWords.has(word.toLowerCase());
 }
 
-module.exports = { addToIndex, search, saveIndex, loadIndex, index };
+function getIndexStats() {
+    return {
+        totalEntries: Object.keys(invertedIndex).length + Object.keys(urlToContent).length,
+        wordEntries: Object.keys(invertedIndex).length,
+        urlEntries: Object.keys(urlToContent).length
+    };
+}
+
+module.exports = { addToIndex, search, saveIndex, loadIndex, addLink, calculatePageRank, getIndexStats };

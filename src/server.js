@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { crawl, crawlPage, crawledUrls, urlQueue } = require('./crawler.js');
-const { addToIndex, saveIndex, loadIndex, index } = require('./indexer.js');
+const { addToIndex, saveIndex, loadIndex, calculatePageRank, getIndexStats } = require('./indexer.js');
 const { handleSearch } = require('./search.js');
 
 const app = express();
@@ -71,33 +71,32 @@ async function startAutoCrawling() {
         'https://arxiv.org',
         'https://pmc.ncbi.nlm.nih.gov'
     ];
-    const maxPages = 5000;
+    const maxPages = 250000;
     const concurrency = 5;
 
     console.log(`Starting automatic crawl with ${seedUrls.length} seed URLs and max ${maxPages} pages`);
     try {
         await crawl(seedUrls, maxPages, concurrency);
-        console.log('Automatic crawl completed and index saved.');
+        console.log('Automatic crawl completed. Calculating PageRank...');
+        calculatePageRank();
+        console.log('PageRank calculation completed. Saving index...');
+        await saveIndex();
+        console.log('Index saved. Ready for searches.');
     } catch (error) {
         console.error('Error during automatic crawl:', error);
     }
 }
 
 app.get('/view-index', (req, res) => {
-    const wordCount = Object.keys(index).filter(key => Array.isArray(index[key])).length;
-    const urlCount = Object.keys(index).filter(key => index[key].compressedSnippet).length;
-    res.json({
-        totalEntries: Object.keys(index).length,
-        wordEntries: wordCount,
-        urlEntries: urlCount
-    });
+    const stats = getIndexStats();
+    res.json(stats);
 });
 
 app.get('/crawl-status', (req, res) => {
     res.json({
         crawledUrls: Array.from(crawledUrls),
         queueLength: urlQueue.length,
-        indexSize: Object.keys(index).length
+        indexSize: getIndexStats().totalEntries
     });
 });
 
@@ -115,7 +114,7 @@ app.use((err, req, res, next) => {
         await loadIndex();
         app.listen(PORT, () => {
             console.log(`Roo search engine running on http://localhost:${PORT}`);
-            if (Object.keys(index).length === 0) {
+            if (getIndexStats().totalEntries === 0) {
                 console.log('Index is empty. Starting automatic crawling...');
                 startAutoCrawling();
             } else {
@@ -135,3 +134,18 @@ process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     process.exit(1);
 });
+
+// Add a function to periodically recalculate PageRank
+async function periodicPageRankUpdate() {
+    try {
+        console.log('Starting periodic PageRank update...');
+        calculatePageRank();
+        await saveIndex();
+        console.log('PageRank update completed and index saved.');
+    } catch (error) {
+        console.error('Error during periodic PageRank update:', error);
+    }
+}
+
+// Set up periodic PageRank updates (e.g., every 6 hours)
+setInterval(periodicPageRankUpdate, 6 * 60 * 60 * 1000);

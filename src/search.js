@@ -1,15 +1,18 @@
-const { index, search } = require('./indexer.js');
+const { search } = require('./indexer.js');
 
-async function handleSearch(query) {
+async function handleSearch(query, page = 1, resultsPerPage = 10) {
     if (!query || query.trim() === "") {
         return { error: 'Query parameter is required' };
     }
 
-    console.log(`Searching for "${query}"`);
-    const results = await search(query);
-    console.log(`Found ${results.length} results`);
+    console.log(`Searching for "${query}" (Page ${page})`);
+    const searchResults = await search(query, page, resultsPerPage);
+    console.log(`Found ${searchResults.totalResults} results, showing page ${page} of ${searchResults.totalPages}`);
 
-    return { query, results };
+    return { 
+        query, 
+        ...searchResults
+    };
 }
 
 module.exports = { handleSearch };

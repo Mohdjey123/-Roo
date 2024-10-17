@@ -115,7 +115,7 @@ function getSnippet(text, query, snippetLength = 20) {
     return null; // Return null if no snippet can be created
 }
 
-async function search(query) {
+async function search(query, page = 1, resultsPerPage = 10) {
     const queryTerms = tokenize(query.toLowerCase());
     console.log('Query terms:', queryTerms);
     const results = {};
@@ -152,8 +152,15 @@ async function search(query) {
         results[url].score *= (1 + tfidfScore);
     }
 
-    const sortedResults = await Promise.all(Object.entries(results)
-        .sort((a, b) => b[1].score - a[1].score)
+    const sortedResults = Object.entries(results)
+        .sort((a, b) => b[1].score - a[1].score);
+
+    const totalResults = sortedResults.length;
+    const totalPages = Math.ceil(totalResults / resultsPerPage);
+    const startIndex = (page - 1) * resultsPerPage;
+    const endIndex = startIndex + resultsPerPage;
+
+    const paginatedResults = await Promise.all(sortedResults.slice(startIndex, endIndex)
         .map(async ([url, data]) => {
             if (!urlToContent[url]) {
                 console.error(`Missing compressed text for URL: ${url}`);
@@ -184,8 +191,13 @@ async function search(query) {
             }
         }));
 
-    console.log(`Searching for "${query}", found ${sortedResults.length} results`);
-    return sortedResults;
+    console.log(`Searching for "${query}", found ${totalResults} results, showing page ${page} of ${totalPages}`);
+    return {
+        results: paginatedResults,
+        totalResults,
+        currentPage: page,
+        totalPages
+    };
 }
 
 async function saveIndex() {

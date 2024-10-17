@@ -8,6 +8,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.static('public'));
+app.use(express.static('.'));  // Serve files from the root directory
 
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -15,17 +16,20 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/html/index.html'));
+    res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 app.get('/search', async (req, res) => {
     const query = req.query.q;
+    const page = parseInt(req.query.page) || 1;
+    const resultsPerPage = parseInt(req.query.perPage) || 10;
+
     if (!query) {
         return res.status(400).json({ error: 'Query parameter is required' });
     }
     try {
-        console.log(`Searching for: "${query}"`);
-        const searchResults = await handleSearch(query);
+        console.log(`Searching for: "${query}" (Page ${page})`);
+        const searchResults = await handleSearch(query, page, resultsPerPage);
         res.json(searchResults);
     } catch (error) {
         console.error(`Error searching for "${query}":`, error);
@@ -71,7 +75,7 @@ async function startAutoCrawling() {
         'https://arxiv.org',
         'https://pmc.ncbi.nlm.nih.gov'
     ];
-    const maxPages = 250000;
+    const maxPages = 250;
     const concurrency = 5;
 
     console.log(`Starting automatic crawl with ${seedUrls.length} seed URLs and max ${maxPages} pages`);
